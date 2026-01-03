@@ -1,9 +1,5 @@
-streamlit>=1.29.0
-pandas>=2.0.3
+streamlit==1.29.0
+pandas==2.0.3
 numpy>=1.26.0
-catboost>=1.2
-plotly>=5.18.0
-
-
-## Solution 2: Force Python 3.11
-
+catboost==1.2
+plotly==5.18.0
