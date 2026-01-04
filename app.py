@@ -1,6 +1,6 @@
 """
-Landslide Susceptibility Prediction App
-Streamlit version with improved UI - ALL VISIBILITY ISSUES FIXED
+Landslide Susceptibility Prediction App - Enhanced Version
+WITH THRESHOLD CONTROL + SHAP EXPLAINABILITY
 """
 
 import streamlit as st
@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import os
+import time
 
 # Page config - MUST be first Streamlit command
 st.set_page_config(
@@ -17,10 +18,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS - COMPLETELY REVISED FOR VISIBILITY
+# Custom CSS with subtle animations
 st.markdown("""
 <style>
-    /* ===== FORCE LIGHT THEME EVERYWHERE ===== */
     :root {
         color-scheme: light !important;
     }
@@ -31,14 +31,12 @@ st.markdown("""
         background-color: #ffffff !important;
     }
     
-    /* ===== FIX HEADER CUTOFF ===== */
     .main .block-container {
         padding-top: 2rem !important;
         padding-bottom: 2rem;
         max-width: 100%;
     }
     
-    /* ===== HEADER STYLING ===== */
     .header-custom {
         background: #2c3e50;
         color: white;
@@ -60,7 +58,6 @@ st.markdown("""
         margin: 0;
     }
     
-    /* ===== FIX DARK INPUT BACKGROUNDS ===== */
     .stTextInput input,
     .stNumberInput input,
     .stSelectbox select,
@@ -72,7 +69,6 @@ st.markdown("""
         border: 1px solid #ccc !important;
     }
     
-    /* ===== FIX DATAFRAME DARK BACKGROUND ===== */
     .stDataFrame, 
     [data-testid="stDataFrame"],
     .stDataFrame > div,
@@ -88,12 +84,11 @@ st.markdown("""
         color: #2c3e50 !important;
     }
     
-    /* ===== SECTION HEADERS ===== */
     .section-header {
         font-size: 0.95rem;
         font-weight: 600;
         color: #2c3e50 !important;
-        margin: 1.5rem 0 1rem 0;
+        margin: 2rem 0 1rem 0;
         padding-bottom: 0.5rem;
         border-bottom: 2px solid #34495e;
         text-transform: uppercase;
@@ -101,7 +96,6 @@ st.markdown("""
         background-color: transparent !important;
     }
     
-    /* ===== RESULT BOXES ===== */
     .result-metric {
         background: #ffffff;
         border: 1px solid #ddd;
@@ -131,7 +125,6 @@ st.markdown("""
         color: #666 !important;
     }
     
-    /* ===== INTERPRETATION BOX ===== */
     .interpretation-box {
         background: #ffffff;
         border: 1px solid #ddd;
@@ -154,7 +147,6 @@ st.markdown("""
         color: #444 !important;
     }
     
-    /* ===== INFO BOX ===== */
     .info-box-custom {
         background: #fffbf0;
         border: 1px solid #ffc107;
@@ -178,7 +170,40 @@ st.markdown("""
         font-size: 0.9rem;
     }
     
-    /* ===== FOOTER ===== */
+    .alert-box {
+        background: #fee;
+        border: 2px solid #c53030;
+        border-left: 6px solid #c53030;
+        padding: 1.25rem;
+        margin: 1rem 0;
+        border-radius: 4px;
+        font-weight: 600;
+        text-align: center;
+    }
+    
+    .no-alert-box {
+        background: #e8f5e9;
+        border: 2px solid #38a169;
+        border-left: 6px solid #38a169;
+        padding: 1.25rem;
+        margin: 1rem 0;
+        border-radius: 4px;
+        font-weight: 600;
+        text-align: center;
+    }
+    
+    .alert-box-text {
+        font-size: 1.1rem;
+        color: #c53030 !important;
+        margin: 0;
+    }
+    
+    .no-alert-box-text {
+        font-size: 1.1rem;
+        color: #38a169 !important;
+        margin: 0;
+    }
+    
     .footer-note {
         background: #ecf0f1;
         padding: 1.5rem;
@@ -200,7 +225,6 @@ st.markdown("""
         margin: 0;
     }
     
-    /* ===== BUTTON STYLING ===== */
     .stButton > button {
         width: 100%;
         background: #3498db !important;
@@ -210,7 +234,7 @@ st.markdown("""
         font-size: 1rem;
         font-weight: 600;
         border-radius: 4px;
-        transition: all 0.3s;
+        transition: all 0.2s ease-out;
     }
     
     .stButton > button:hover {
@@ -218,8 +242,12 @@ st.markdown("""
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
     }
+
+    .stButton > button:active {
+        transform: scale(0.98);
+        box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);
+    }
     
-    /* ===== SLIDER STYLING ===== */
     .stSlider [data-baseweb="slider"] {
         background-color: transparent;
     }
@@ -228,33 +256,65 @@ st.markdown("""
         background-color: #3498db;
     }
     
-    /* ===== FIX LABELS ===== */
     label, .stSlider label {
         color: #2c3e50 !important;
         font-size: 0.9rem !important;
     }
     
-    /* ===== INFO MESSAGE ===== */
     .stAlert {
         background-color: #e3f2fd !important;
         border: 1px solid #90caf9 !important;
         color: #1565c0 !important;
     }
     
-    /* ===== REMOVE STREAMLIT BRANDING ===== */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* ===== COLUMN SPACING ===== */
     div[data-testid="column"] {
         padding: 0 0.5rem;
+    }
+
+    /* Fade-in animation */
+    .fade-in {
+        opacity: 0;
+        animation: fadeIn 0.4s ease-in-out forwards;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* One-time pulse for alert box */
+    .pulse-once {
+        animation: pulseOnce 0.6s ease-out;
+    }
+
+    @keyframes pulseOnce {
+        0% { box-shadow: 0 0 0 0 rgba(197,48,48,0.6); }
+        100% { box-shadow: 0 0 12px rgba(197,48,48,0); }
+    }
+
+    /* Map caption */
+    .map-caption {
+        font-size: 0.8rem;
+        color: #555;
+        opacity: 0.95;
+        transition: opacity 0.3s ease-in-out;
+    }
+
+    .map-caption:hover {
+        opacity: 1.0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Model configuration
 MODEL_PATH = 'landslide_susceptibility_catboost.cbm'
+HIST_CSV_PATH = 'landslides_hp.csv'
+
+FEATURE_ORDER = ['rain_1d', 'rain_3d', 'rain_7d', 'slope', 'lulc']
 
 LULC_ENCODING = {
     'Forest': 0,
@@ -266,26 +326,19 @@ LULC_ENCODING = {
     'Shrubland': 6
 }
 
-FEATURE_IMPORTANCE = {
-    'rain_7d': 45.2,
-    'rain_3d': 28.1,
-    'slope': 15.7,
-    'rain_1d': 8.3,
-    'lulc': 2.7
-}
-
-MODEL_STATS = {
-    'roc_auc': 0.9761,
-    'recall': 96.15,
-    'specificity': 89.33,
-    'threshold': 0.5,
-    'total_samples': 685500,
-    'positive_cases': 103
+THRESHOLD_INFO = {
+    0.1: {"recall": 99.03, "alert_rate": 28.45, "specificity": 71.55},
+    0.2: {"recall": 98.06, "alert_rate": 18.92, "specificity": 81.08},
+    0.3: {"recall": 97.09, "alert_rate": 14.33, "specificity": 85.67},
+    0.4: {"recall": 96.60, "alert_rate": 12.18, "specificity": 87.82},
+    0.5: {"recall": 96.15, "alert_rate": 10.67, "specificity": 89.33},
+    0.6: {"recall": 89.32, "alert_rate": 7.24, "specificity": 92.76},
+    0.7: {"recall": 77.67, "alert_rate": 4.21, "specificity": 95.79},
+    0.8: {"recall": 58.25, "alert_rate": 1.89, "specificity": 98.11}
 }
 
 @st.cache_resource
 def load_model():
-    """Load the CatBoost model - REQUIRED FOR APP TO WORK"""
     try:
         if not os.path.exists(MODEL_PATH):
             return None
@@ -297,84 +350,292 @@ def load_model():
         st.error(f"Error loading model: {str(e)}")
         return None
 
-def predict_landslide_demo(features_dict):
-    """Demo prediction using simple heuristics"""
-    rain_score = (features_dict['rain_7d'] * 0.45 + 
-                  features_dict['rain_3d'] * 0.28 + 
-                  features_dict['rain_1d'] * 0.08) / 1000
-    slope_score = features_dict['slope'] * 0.0157
-    lulc_risk = {0: 0.3, 1: 0.1, 2: 0.2, 3: 0.4, 4: 0.05, 5: 0.15, 6: 0.25}
-    lulc_score = lulc_risk.get(features_dict['lulc_code'], 0.2) * 0.027
-    
-    probability = rain_score + slope_score + lulc_score
-    probability = min(max(probability, 0.0), 0.99)
-    probability += np.random.uniform(-0.05, 0.05)
-    probability = min(max(probability, 0.0), 0.99)
-    return probability
-
-def predict_landslide(model, features_dict):
-    """Make prediction using CatBoost model ONLY"""
+@st.cache_data
+def load_historical_landslides():
+    if not os.path.exists(HIST_CSV_PATH):
+        return None
     try:
-        features_df = pd.DataFrame([[
-            features_dict['rain_1d'],
-            features_dict['rain_3d'],
-            features_dict['rain_7d'],
-            features_dict['slope'],
-            features_dict['lulc_code']
-        ]], columns=['rain_1d', 'rain_3d', 'rain_7d', 'slope', 'lulc'])
-        probability = float(model.predict_proba(features_df)[0][1])
-        return probability
-    except Exception as e:
-        st.error(f"Prediction error: {str(e)}")
+        df = pd.read_csv(HIST_CSV_PATH)
+        required_cols = {'event_date', 'latitude', 'longitude'}
+        if not required_cols.issubset(df.columns):
+            return None
+        df = df.dropna(subset=['latitude', 'longitude'])
+        df['event_date'] = pd.to_datetime(df['event_date'], errors='coerce')
+        df = df.dropna(subset=['event_date'])
+        return df
+    except Exception:
         return None
 
-def get_risk_level(probability):
-    """Classify risk level"""
-    if probability >= 0.7:
-        return {
-            'level': 'CRITICAL',
-            'color': '#c53030',
-            'emoji': '🔴',
-            'recommendation': 'Model indicates critical susceptibility level. This output suggests conditions strongly associated with historical landslide occurrence. Requires immediate expert assessment and validation with ground observations.'
-        }
-    elif probability >= 0.5:
-        return {
-            'level': 'HIGH',
-            'color': '#dd6b20',
-            'emoji': '🟠',
-            'recommendation': 'Model indicates high susceptibility. Conditions show significant similarity to historical landslide-triggering scenarios. Recommend enhanced monitoring and expert consultation.'
-        }
-    elif probability >= 0.3:
-        return {
-            'level': 'MODERATE',
-            'color': '#d69e2e',
-            'emoji': '🟡',
-            'recommendation': 'Model indicates moderate susceptibility. Conditions show partial alignment with landslide-prone scenarios. Continue standard monitoring protocols and maintain situational awareness.'
-        }
+def haversine_km(lat1, lon1, lat2_array, lon2_array):
+    R = 6371.0
+    lat1_rad = np.radians(lat1)
+    lon1_rad = np.radians(lon1)
+    lat2_rad = np.radians(lat2_array)
+    lon2_rad = np.radians(lon2_array)
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon / 2.0) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+    return R * c
+
+def compute_historical_context(lat, lon, buffer_km=20.0):
+    """Return summary stats plus dataframe of nearby events."""
+    hist_df = load_historical_landslides()
+    if hist_df is None or hist_df.empty:
+        return None, None
+    dists_km = haversine_km(lat, lon, hist_df['latitude'].values, hist_df['longitude'].values)
+    hist_df = hist_df.copy()
+    hist_df['distance_km'] = dists_km
+    nearby = hist_df[hist_df['distance_km'] <= buffer_km]
+    if nearby.empty:
+        ctx = {'count': 0, 'nearest_km': None, 'recent_year': None}
+        return ctx, nearby
+    ctx = {
+        'count': int(len(nearby)),
+        'nearest_km': float(nearby['distance_km'].min()),
+        'recent_year': int(nearby['event_date'].max().year)
+    }
+    return ctx, nearby
+
+def predict_landslide(model, features_dict):
+    try:
+        row = [
+            features_dict[f] if f != 'lulc' else features_dict['lulc_code']
+            for f in FEATURE_ORDER
+        ]
+        features_df = pd.DataFrame([row], columns=FEATURE_ORDER)
+        probability = float(model.predict_proba(features_df)[0][1])
+        return probability, features_df
+    except Exception as e:
+        st.error(f"Prediction error: {str(e)}")
+        return None, None
+
+def get_risk_level_by_threshold(probability, threshold):
+    eps = 1e-6
+    if probability >= threshold:
+        distance = (probability - threshold) / max((1.0 - threshold), eps)
+        if distance >= 0.7:
+            return {
+                'level': 'VERY HIGH',
+                'color': '#9b1c1c',
+                'emoji': '🔴',
+                'alert': True,
+                'recommendation': (
+                    f'Predicted probability P(landslide) = {probability:.4f} significantly exceeds threshold ({threshold:.2f}). '
+                    'Model indicates very high susceptibility. Immediate expert assessment and '
+                    'validation with ground observations are recommended.'
+                )
+            }
+        elif distance >= 0.4:
+            return {
+                'level': 'HIGH',
+                'color': '#c53030',
+                'emoji': '🟠',
+                'alert': True,
+                'recommendation': (
+                    f'Predicted probability P(landslide) = {probability:.4f} exceeds threshold ({threshold:.2f}). '
+                    'Model indicates high susceptibility. Enhanced monitoring and risk mitigation '
+                    'measures are recommended.'
+                )
+            }
+        else:
+            return {
+                'level': 'MODERATE',
+                'color': '#dd6b20',
+                'emoji': '🟡',
+                'alert': True,
+                'recommendation': (
+                    f'Predicted probability P(landslide) = {probability:.4f} exceeds threshold ({threshold:.2f}). '
+                    'Model indicates moderate susceptibility. Continue monitoring with heightened awareness.'
+                )
+            }
     else:
         return {
             'level': 'LOW',
             'color': '#38a169',
             'emoji': '🟢',
-            'recommendation': 'Model indicates low susceptibility under current parameter conditions. Maintain routine observational protocols. Note that low probability does not guarantee absence of risk.'
+            'alert': False,
+            'recommendation': (
+                f'Predicted probability P(landslide) = {probability:.4f} is below threshold ({threshold:.2f}). '
+                'Model indicates low susceptibility under current conditions. Maintain routine monitoring protocols.'
+            )
         }
 
-def create_map(lat, lon):
-    """Create interactive map"""
-    fig = go.Figure(go.Scattermapbox(
+@st.cache_resource
+def get_shap_explainer(model):
+    import shap
+    return shap.TreeExplainer(model)
+
+def get_shap_explanation(model, features_df):
+    try:
+        import shap
+        explainer = get_shap_explainer(model)
+        shap_values = explainer.shap_values(features_df)
+        base_value = explainer.expected_value
+        if isinstance(base_value, (list, np.ndarray)):
+            base_value = float(base_value[-1])
+        else:
+            base_value = float(base_value)
+        if isinstance(shap_values, list):
+            shap_vals = shap_values[-1][0]
+        else:
+            shap_vals = shap_values[0]
+        feature_names = features_df.columns.tolist()
+        feature_values = features_df.iloc[0].tolist()
+        contributions = {}
+        for fname, fval, shap_val in zip(feature_names, feature_values, shap_vals):
+            contributions[fname] = {
+                'value': fval,
+                'contribution': float(shap_val),
+                'abs_contribution': abs(float(shap_val))
+            }
+        sorted_features = sorted(
+            contributions.items(), 
+            key=lambda x: x[1]['abs_contribution'], 
+            reverse=True
+        )
+        return {
+            'base_value': base_value,
+            'contributions': dict(sorted_features),
+            'prediction_explained': True
+        }
+    except ImportError:
+        feature_names = features_df.columns.tolist()
+        feature_values = features_df.iloc[0].tolist()
+        importance_map = {
+            'rain_7d': 0.452,
+            'rain_3d': 0.281,
+            'slope': 0.157,
+            'rain_1d': 0.083,
+            'lulc': 0.027
+        }
+        contributions = {}
+        for fname, fval in zip(feature_names, feature_values):
+            if fname.startswith('rain'):
+                norm_val = fval / 1000.0
+            elif fname == 'slope':
+                norm_val = fval / 90.0
+            else:
+                norm_val = fval / 10.0
+            contrib_val = norm_val * importance_map.get(fname, 0.1)
+            contributions[fname] = {
+                'value': fval,
+                'contribution': contrib_val,
+                'abs_contribution': abs(contrib_val)
+            }
+        sorted_features = sorted(
+            contributions.items(), 
+            key=lambda x: x[1]['abs_contribution'], 
+            reverse=True
+        )
+        return {
+            'base_value': 0.5,
+            'contributions': dict(sorted_features),
+            'prediction_explained': False
+        }
+    except Exception as e:
+        st.warning(f"Could not generate SHAP explanation: {str(e)}")
+        return None
+
+def create_shap_plot(explanation):
+    """Create visualization of feature contributions with high-contrast labels."""
+    if explanation is None:
+        return None
+
+    feature_labels = {
+        'rain_7d': '7-Day Rainfall',
+        'rain_3d': '3-Day Rainfall',
+        'slope': 'Slope Angle',
+        'rain_1d': '1-Day Rainfall',
+        'lulc': 'Land Cover'
+    }
+
+    features = []
+    contributions = []
+    colors = []
+    for fname, data in explanation['contributions'].items():
+        features.append(feature_labels.get(fname, fname))
+        contrib = data['contribution']
+        contributions.append(contrib)
+        colors.append('#e74c3c' if contrib > 0 else '#27ae60')
+
+    fig = go.Figure(go.Bar(
+        y=features[::-1],
+        x=contributions[::-1],
+        orientation='h',
+        marker=dict(
+            color=colors[::-1],
+            line=dict(color='#2c3e50', width=1)
+        ),
+        text=[f'{v:+.4f}' for v in contributions[::-1]],
+        textposition='outside',
+        textfont=dict(color='#2c3e50', size=11),
+        hovertemplate='<b>%{y}</b><br>Contribution: %{x:.4f}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        height=280,
+        margin=dict(l=10, r=80, t=20, b=40),
+        xaxis=dict(
+            title='Contribution to Prediction (SHAP, log-odds)',
+            showgrid=True,
+            gridcolor='#eeeeee',
+            zeroline=True,
+            zerolinecolor='#2c3e50',
+            zerolinewidth=1.5,
+            color='#2c3e50',
+            tickfont=dict(color='#2c3e50')
+        ),
+        yaxis=dict(
+            title='',
+            color='#2c3e50',
+            tickfont=dict(color='#2c3e50')
+        ),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        font=dict(size=12, color='#2c3e50')
+    )
+
+    return fig
+
+def create_map(lat, lon, nearby_events=None):
+    """Map with selected location + optional nearby historical landslides."""
+    fig = go.Figure()
+
+    # Selected location marker
+    fig.add_trace(go.Scattermapbox(
         lat=[lat],
         lon=[lon],
         mode='markers',
         marker=go.scattermapbox.Marker(
-            size=14, 
+            size=16,
             color='red',
             symbol='circle'
         ),
-        text=[f'<b>Selected Location</b><br>Lat: {lat:.4f}°N<br>Lon: {lon:.4f}°E'],
-        hoverinfo='text',
-        hovertemplate='<b>Selected Location</b><br>Lat: %{lat:.4f}°N<br>Lon: %{lon:.4f}°E<extra></extra>'
+        text=[f'Selected Location<br>Lat: {lat:.4f}°N<br>Lon: {lon:.4f}°E'],
+        name='Selected location',
+        hoverinfo='text'
     ))
-    
+
+    # Nearby historical events as small blue points
+    if nearby_events is not None and not nearby_events.empty:
+        fig.add_trace(go.Scattermapbox(
+            lat=nearby_events['latitude'],
+            lon=nearby_events['longitude'],
+            mode='markers',
+            marker=go.scattermapbox.Marker(
+                size=8,
+                color='blue',
+                opacity=0.8
+            ),
+            text=[
+                f"Historical landslide<br>Date: {d.date()}<br>Dist: {dist:.2f} km"
+                for d, dist in zip(nearby_events['event_date'], nearby_events['distance_km'])
+            ],
+            name='Historical landslides (≤20 km)',
+            hoverinfo='text'
+        ))
+
     fig.update_layout(
         mapbox=dict(
             style='open-street-map',
@@ -384,93 +645,90 @@ def create_map(lat, lon):
         height=450,
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor='white',
-        plot_bgcolor='white'
+        plot_bgcolor='white',
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=0.01,
+            xanchor='left',
+            x=0.01,
+        ),
+        legend_font_color="#2c3e50",
+        legend_font_size=11
     )
     return fig
 
-# Main app
 def main():
-    # Custom header
     st.markdown("""
     <div class="header-custom">
-        <h1>🏔️ Landslide Susceptibility Assessment System</h1>
-        <p>CatBoost ML Model v1.0 | Himachal Pradesh Study Region | Research Tool</p>
+        <h1>Landslide Susceptibility Assessment System</h1>
+        <p>CatBoost ML Model v1.0 | Himachal Pradesh Study Region | Research Dashboard</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Load model - REQUIRED
     model = load_model()
     if model is None:
-        st.error("❌ **Model File Not Found**")
-        st.warning(f"""
-        The CatBoost model file `{MODEL_PATH}` is required to run this application.
-        
-        **To fix this:**
-        1. Place your trained model file in the same directory as this app
-        2. Ensure the file is named: `landslide_susceptibility_catboost.cbm`
-        3. Restart the application
-        
-        **Current directory:** `{os.getcwd()}`
-        """)
-        st.stop()  # STOPS THE APP COMPLETELY
+        st.error("Model file not found.")
+        st.stop()
     
-    # Create two columns for layout
     col_left, col_right = st.columns([0.35, 0.65], gap="large")
     
     with col_left:
-        st.markdown('<div class="section-header">📍 LOCATION</div>', unsafe_allow_html=True)
-        
+        st.markdown('<div class="section-header">Location</div>', unsafe_allow_html=True)
         col_lat, col_lon = st.columns(2)
         with col_lat:
-            latitude = st.number_input("Latitude (°N)", min_value=30.0, max_value=33.5, 
-                                      value=31.1048, step=0.0001, format="%.4f")
+            latitude = st.number_input(
+                "Latitude (°N)", min_value=30.0, max_value=33.5, 
+                value=31.1048, step=0.0001, format="%.4f"
+            )
         with col_lon:
-            longitude = st.number_input("Longitude (°E)", min_value=75.5, max_value=79.0, 
-                                       value=77.1734, step=0.0001, format="%.4f")
+            longitude = st.number_input(
+                "Longitude (°E)", min_value=75.5, max_value=79.0, 
+                value=77.1734, step=0.0001, format="%.4f"
+            )
         
-        location_name = st.text_input("Location Name (Optional)", 
-                                     placeholder="e.g., Shimla District")
+        st.markdown('<div class="section-header">Rainfall parameters</div>', unsafe_allow_html=True)
+        rain_1d = st.slider("1-day rainfall (mm)", 0, 500, 50, 5)
+        rain_3d = st.slider("3-day cumulative (mm)", 0, 800, 120, 10)
+        rain_7d = st.slider("7-day cumulative (mm)", 0, 1500, 200, 10)
         
-        st.markdown('<div class="section-header">🌧️ RAINFALL PARAMETERS</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Terrain & land cover</div>', unsafe_allow_html=True)
+        slope = st.slider("Slope angle (degrees)", 0, 90, 35, 1)
+        lulc = st.selectbox("Land use / land cover", list(LULC_ENCODING.keys()))
         
-        rain_1d = st.slider("1-Day Rainfall (mm)", 0, 500, 50, 5)
-        rain_3d = st.slider("3-Day Cumulative (mm)", 0, 800, 120, 10)
-        rain_7d = st.slider("7-Day Cumulative (mm)", 0, 1500, 200, 10)
-        
-        st.markdown('<div class="section-header">⛰️ TERRAIN & LAND COVER</div>', unsafe_allow_html=True)
-        
-        slope = st.slider("Slope Angle (degrees)", 0, 90, 35, 1)
-        lulc = st.selectbox("Land Use / Land Cover", list(LULC_ENCODING.keys()))
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        compute = st.button("🔍 Compute Susceptibility", use_container_width=True, type="primary")
-        
-        # Model Performance Metrics
-        st.markdown('<div class="section-header">📊 MODEL PERFORMANCE METRICS</div>', unsafe_allow_html=True)
-        
-        metrics_df = pd.DataFrame({
-            'Metric': ['ROC-AUC', 'Recall (TPR)', 'Specificity (TNR)', 
-                      'False Positive Rate', 'Classification Threshold', 
-                      'Training Samples', 'Positive Cases'],
-            'Value': ['0.9761', '96.15%', '89.33%', '10.67%', '0.50', 
-                     '685,500', '103 (0.015%)']
-        })
-        
-        st.dataframe(metrics_df, hide_index=True, use_container_width=True, height=280)
-        
-        st.markdown("""
-        <div class="info-box-custom">
-            <strong>Note on Class Imbalance</strong>
-            This model is trained on highly imbalanced data where landslide events 
-            represent only 0.015% of observations. The threshold is optimized for 
-            high recall at the cost of elevated false positive rates—intentional 
-            for life-safety applications.
+        st.markdown('<div class="section-header">Decision threshold</div>', unsafe_allow_html=True)
+        threshold = st.slider(
+            "Classification threshold", 
+            min_value=0.1, 
+            max_value=0.8, 
+            value=0.5, 
+            step=0.1,
+            help="Lower threshold increases recall at the cost of more alerts."
+        )
+        thresh_info = THRESHOLD_INFO.get(threshold, THRESHOLD_INFO[0.5])
+        st.markdown(f"""
+        <div class="info-box-custom fade-in">
+            <strong>Threshold performance (@ {threshold:.1f})</strong>
+            • Recall (sensitivity): {thresh_info['recall']:.2f}%<br>
+            • Alert rate (% classified positive): {thresh_info['alert_rate']:.2f}%
         </div>
         """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        compute = st.button("Compute susceptibility", use_container_width=True, type="primary")
     
     with col_right:
-        st.markdown('<div class="section-header">🗺️ STUDY AREA MAP</div>', unsafe_allow_html=True)
-        st.plotly_chart(create_map(latitude, longitude), use_container_width=True)
+        st.markdown('<div class="section-header">Study area map</div>', unsafe_allow_html=True)
+        map_placeholder = st.empty()
+        map_placeholder.plotly_chart(
+            create_map(latitude, longitude, nearby_events=None),
+            use_container_width=True
+        )
+        st.markdown("""
+        <div class="map-caption">
+            Map visualization is for spatial context only and does not represent model grid resolution.
+        </div>
+        """, unsafe_allow_html=True)
         
         if compute:
             features_dict = {
@@ -480,206 +738,186 @@ def main():
                 'slope': float(slope),
                 'lulc_code': LULC_ENCODING[lulc]
             }
+            with st.spinner('Computing susceptibility and explanation...'):
+                probability, features_df = predict_landslide(model, features_dict)
+                explanation = None
+                if probability is not None:
+                    explanation = get_shap_explanation(model, features_df)
             
-            with st.spinner('Computing susceptibility...'):
-                probability = predict_landslide(model, features_dict)
-            
+            # Alert / no-alert
+            alert_placeholder = st.empty()
             if probability is not None:
-                risk = get_risk_level(probability)
-                confidence = 0.85 + abs(probability - 0.5) * 0.3
-                
-                st.markdown('<div class="section-header">📈 COMPUTATION RESULTS</div>', unsafe_allow_html=True)
-                
-                # Result metrics
-                metric_col1, metric_col2 = st.columns(2)
-                with metric_col1:
+                risk = get_risk_level_by_threshold(probability, threshold)
+                if risk['alert']:
+                    alert_html = """
+                    <div class="alert-box pulse-once fade-in">
+                        <p class="alert-box-text">Alert: susceptibility exceeds threshold</p>
+                    </div>
+                    """
+                else:
+                    alert_html = """
+                    <div class="no-alert-box fade-in">
+                        <p class="no-alert-box-text">No alert: below threshold</p>
+                    </div>
+                    """
+                alert_placeholder.markdown(alert_html, unsafe_allow_html=True)
+                time.sleep(0.15)
+            
+            # Probability + classification
+            metrics_placeholder = st.empty()
+            if probability is not None:
+                with metrics_placeholder.container():
+                    metric_col1, metric_col2 = st.columns(2)
+                    with metric_col1:
+                        st.markdown(f"""
+                        <div class="result-metric fade-in">
+                            <div class="result-label">Predicted probability P(landslide)</div>
+                            <div class="result-value">{probability:.6f}</div>
+                            <div class="result-subtext">Current threshold: {threshold:.2f}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with metric_col2:
+                        st.markdown(f"""
+                        <div class="result-metric fade-in" style="border-left: 4px solid {risk['color']};">
+                            <div class="result-label">Classification</div>
+                            <div class="result-value" style="color: {risk['color']};">
+                                {risk['emoji']} {risk['level']}
+                            </div>
+                            <div class="result-subtext">Threshold-based risk category</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                     st.markdown(f"""
-                    <div class="result-metric">
-                        <div class="result-label">Model Probability</div>
-                        <div class="result-value">{probability:.6f}</div>
-                        <div class="result-subtext">Threshold: 0.50</div>
+                    <div class="interpretation-box fade-in" style="border-left: 4px solid {risk['color']};">
+                        <div class="interpretation-title">Interpretation</div>
+                        <div class="interpretation-text">{risk['recommendation']}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                
-                with metric_col2:
-                    st.markdown(f"""
-                    <div class="result-metric" style="border-left: 4px solid {risk['color']};">
-                        <div class="result-label">Classification</div>
-                        <div class="result-value" style="color: {risk['color']};">{risk['emoji']} {risk['level']}</div>
-                        <div class="result-subtext">Confidence: {confidence*100:.0f}%</div>
+                time.sleep(0.15)
+            
+            st.markdown('<hr style="border:none; border-top:1px solid #eee; margin:1.2rem 0;">', unsafe_allow_html=True)
+            
+            # Historical context + update same map with historical points
+            hist_placeholder = st.empty()
+            with hist_placeholder.container():
+                st.markdown('<div class="section-header">Historical landslides</div>', unsafe_allow_html=True)
+                hist_ctx, nearby_events = compute_historical_context(latitude, longitude, buffer_km=20.0)
+                if hist_ctx is None:
+                    st.markdown("""
+                    <div class="interpretation-box fade-in">
+                        <div class="interpretation-title">Historical Landslide Context (within 20 km)</div>
+                        <div class="interpretation-text">
+                            Historical landslide catalog could not be loaded from <code>landslides_hp.csv</code>.
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
-                
-                # Interpretation
-                st.markdown(f"""
-                <div class="interpretation-box" style="border-left: 4px solid {risk['color']};">
-                    <div class="interpretation-title">Interpretation</div>
-                    <div class="interpretation-text">{risk['recommendation']}</div>
+                else:
+                    if hist_ctx['count'] == 0:
+                        st.markdown("""
+                        <div class="interpretation-box fade-in">
+                            <div class="interpretation-title">Historical Landslide Context (within 20 km)</div>
+                            <div class="interpretation-text">
+                                No recorded historical landslides within 20 km of this location.
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div class="interpretation-box fade-in">
+                            <div class="interpretation-title">Historical Landslide Context (within 20 km)</div>
+                            <div class="interpretation-text">
+                                • Total past landslides within 20 km: <strong>{hist_ctx['count']}</strong><br>
+                                • Nearest historical landslide: <strong>{hist_ctx['nearest_km']:.2f} km</strong><br>
+                                • Most recent event year: <strong>{hist_ctx['recent_year']}</strong>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                st.markdown("""
+                <div class="interpretation-text fade-in" style="font-size:0.8rem; color:#555; margin-top:0.5rem;">
+                    Historical events are shown for situational awareness only and are independent of model predictions.
                 </div>
                 """, unsafe_allow_html=True)
-                
-                # Input Summary
-                st.markdown('<div class="section-header">📋 INPUT SUMMARY</div>', unsafe_allow_html=True)
-                
-                summary_df = pd.DataFrame({
-                    'Parameter': ['Location', 'Coordinates', '1-Day Rainfall', 
-                                '3-Day Rainfall', '7-Day Rainfall', 'Slope', 'Land Cover'],
-                    'Value': [
-                        location_name if location_name else 'Custom Location',
-                        f"{latitude:.4f}°N, {longitude:.4f}°E",
-                        f"{rain_1d} mm",
-                        f"{rain_3d} mm",
-                        f"{rain_7d} mm",
-                        f"{slope}°",
-                        lulc
-                    ]
-                })
-                st.dataframe(summary_df, hide_index=True, use_container_width=True, height=280)
-        else:
-            # Welcome/Info section before first computation
-            st.markdown('<div class="section-header">👋 WELCOME</div>', unsafe_allow_html=True)
+
+            # Update the same map placeholder with historical events overlay
+            map_placeholder.plotly_chart(
+                create_map(latitude, longitude, nearby_events=nearby_events),
+                use_container_width=True
+            )
+
+            st.markdown('<hr style="border:none; border-top:1px solid #eee; margin:1.2rem 0;">', unsafe_allow_html=True)
             
+            # SHAP explanation
+            shap_placeholder = st.empty()
+            if probability is not None and explanation is not None:
+                with shap_placeholder.container():
+                    st.markdown('<div class="section-header">Prediction explanation</div>', unsafe_allow_html=True)
+                    shap_fig = create_shap_plot(explanation)
+                    if shap_fig is not None:
+                        st.plotly_chart(shap_fig, use_container_width=True)
+                    top_features = list(explanation['contributions'].items())[:3]
+                    feature_labels = {
+                        'rain_7d': '7-Day Rainfall',
+                        'rain_3d': '3-Day Rainfall',
+                        'slope': 'Slope Angle',
+                        'rain_1d': '1-Day Rainfall',
+                        'lulc': 'Land Cover'
+                    }
+                    explanation_text = (
+                        "<div class='interpretation-box fade-in'>"
+                        "<div class='interpretation-title'>Key contributors</div>"
+                        "<div class='interpretation-text'>"
+                    )
+                    for fname, data in top_features:
+                        direction = "increased" if data['contribution'] > 0 else "decreased"
+                        arrow = "↑" if data['contribution'] > 0 else "↓"
+                        explanation_text += (
+                            f"<strong style='color: #2c3e50;'>{arrow} {feature_labels.get(fname, fname)}</strong>: "
+                            f"Value = {data['value']:.2f}, {direction} susceptibility by "
+                            f"{abs(data['contribution']):.4f}<br>"
+                        )
+                    if explanation['prediction_explained']:
+                        explanation_text += (
+                            "<br>This explanation is based on SHAP values from the CatBoost model, "
+                            "which attribute the prediction to each feature in a locally consistent way."
+                        )
+                    else:
+                        explanation_text += (
+                            "<br>This explanation uses an importance-based approximation because "
+                            "the SHAP library was not available in the runtime environment."
+                        )
+                    explanation_text += "</div></div>"
+                    st.markdown(explanation_text, unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="section-header">Welcome</div>', unsafe_allow_html=True)
             st.markdown("""
-            <div class="interpretation-box">
-                <div class="interpretation-title">About This Tool</div>
+            <div class="interpretation-box fade-in">
+                <div class="interpretation-title">About this dashboard</div>
                 <div class="interpretation-text">
-                    This system uses machine learning to assess landslide susceptibility based on 
-                    rainfall patterns, terrain characteristics, and land cover. The model was trained 
-                    on historical landslide data from Himachal Pradesh, India (2014-2016).
+                    This web-based system is an inference-only research dashboard that applies a
+                    pre-trained CatBoost susceptibility model to user-defined environmental scenarios.
+                    It does not ingest real-time data nor issue public warnings, and is intended solely
+                    for decision-support, sensitivity analysis, and scientific demonstration.
                     <br><br>
-                    <strong style="color: #2c3e50;">To get started:</strong>
-                    <ol style="margin: 0.5rem 0 0 1.2rem; padding: 0; color: #444;">
-                        <li>Adjust the location coordinates or click on the map above</li>
-                        <li>Set rainfall parameters based on recent weather data</li>
-                        <li>Configure terrain slope and land cover type</li>
-                        <li>Click <strong>"Compute Susceptibility"</strong> to see results</li>
+                    <strong style="color:#2c3e50;">How to use</strong>
+                    <ol style="margin:0.5rem 0 0 1.2rem; padding:0; color:#444;">
+                        <li>Select a location within the Himachal Pradesh study area.</li>
+                        <li>Set rainfall parameters based on hypothetical or historical conditions.</li>
+                        <li>Configure slope and land cover.</li>
+                        <li>Adjust the decision threshold to explore recall vs. alert tradeoffs.</li>
+                        <li>Click <strong>“Compute susceptibility”</strong> to view risk category and explanation.</li>
                     </ol>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
-            # Feature Importance Chart
-            st.markdown('<div class="section-header">📊 FEATURE IMPORTANCE</div>', unsafe_allow_html=True)
-            
-            # Create horizontal bar chart with VISIBLE LABELS
-            features = list(FEATURE_IMPORTANCE.keys())
-            importance = list(FEATURE_IMPORTANCE.values())
-            
-            feature_labels = {
-                'rain_7d': '7-Day Rainfall',
-                'rain_3d': '3-Day Rainfall', 
-                'slope': 'Slope Angle',
-                'rain_1d': '1-Day Rainfall',
-                'lulc': 'Land Cover'
-            }
-            
-            labels = [feature_labels[f] for f in features]
-            
-            fig = go.Figure(go.Bar(
-                x=importance,
-                y=labels,
-                orientation='h',
-                marker=dict(
-                    color='#3498db',
-                    line=dict(color='#2980b9', width=1)
-                ),
-                text=[f'{v}%' for v in importance],
-                textposition='outside',
-                textfont=dict(color='#2c3e50', size=12),
-                hovertemplate='<b>%{y}</b><br>Importance: %{x}%<extra></extra>'
-            ))
-            
-            fig.update_layout(
-                height=300,
-                margin=dict(l=10, r=80, t=20, b=20),
-                xaxis=dict(
-                    title='Relative Importance (%)',
-                    showgrid=True,
-                    gridcolor='#eee',
-                    range=[0, max(importance) * 1.25],
-                    color='#2c3e50'
-                ),
-                yaxis=dict(
-                    title='',
-                    autorange='reversed',
-                    color='#2c3e50'
-                ),
-                paper_bgcolor='white',
-                plot_bgcolor='white',
-                font=dict(size=12, color='#2c3e50')
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("""
-            <div class="interpretation-text" style="padding: 0 0.5rem; color: #444 !important;">
-                The chart above shows which factors have the most influence on landslide predictions. 
-                Cumulative rainfall (especially over 7 days) is the strongest predictor, followed by 
-                slope angle and land cover type.
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Quick Stats
-            st.markdown('<div class="section-header">📈 KEY STATISTICS</div>', unsafe_allow_html=True)
-            
-            stats_col1, stats_col2, stats_col3 = st.columns(3)
-            
-            with stats_col1:
-                st.markdown("""
-                <div class="result-metric">
-                    <div class="result-label">Model Accuracy</div>
-                    <div class="result-value" style="font-size: 1.5rem;">97.61%</div>
-                    <div class="result-subtext">ROC-AUC Score</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with stats_col2:
-                st.markdown("""
-                <div class="result-metric">
-                    <div class="result-label">Recall Rate</div>
-                    <div class="result-value" style="font-size: 1.5rem;">96.15%</div>
-                    <div class="result-subtext">True Positives Detected</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with stats_col3:
-                st.markdown("""
-                <div class="result-metric">
-                    <div class="result-label">Training Data</div>
-                    <div class="result-value" style="font-size: 1.5rem;">685K</div>
-                    <div class="result-subtext">Sample Locations</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Study Area Info
-            st.markdown('<div class="section-header">🏔️ STUDY AREA</div>', unsafe_allow_html=True)
-            
-            st.markdown("""
-            <div class="interpretation-box">
-                <div class="interpretation-text">
-                    <strong style="color: #2c3e50;">Geographic Coverage:</strong> Himachal Pradesh, India<br>
-                    <strong style="color: #2c3e50;">Latitude Range:</strong> 30.0°N to 33.5°N<br>
-                    <strong style="color: #2c3e50;">Longitude Range:</strong> 75.5°E to 79.0°E<br>
-                    <strong style="color: #2c3e50;">Training Period:</strong> 2014-2016<br>
-                    <strong style="color: #2c3e50;">Model Type:</strong> CatBoost Gradient Boosting Classifier<br>
-                    <strong style="color: #2c3e50;">Total Landslide Events:</strong> 103 documented cases
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
     
-    # Footer
     st.markdown("""
     <div class="footer-note">
-        <h4>⚠️ Research Use Notice</h4>
+        <h4>Research use notice</h4>
         <p>
-            This system is a research prototype for demonstration and evaluation purposes. 
-            It uses a CatBoost gradient boosting classifier trained on historical landslide 
-            data from Himachal Pradesh (2014-2016). The model is optimized for high recall 
-            in the context of extreme class imbalance and should not be used as the sole 
-            basis for operational decisions. Practical deployment requires integration with 
-            real-time monitoring systems, ground-truth validation, and expert interpretation 
-            within a comprehensive risk assessment framework. Model performance may degrade 
-            outside the spatial and temporal bounds of the training data.
+            The web-based system is an inference-only research dashboard that applies a pre-trained CatBoost
+            susceptibility model to user-defined environmental scenarios. It does not ingest real-time data
+            nor issue public warnings, and is intended solely for decision-support, sensitivity analysis,
+            and scientific demonstration. Any operational use would require additional validation, real-time
+            data integration, and expert oversight.
         </p>
     </div>
     """, unsafe_allow_html=True)
